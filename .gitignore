@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Go
+/vendor/
+
+# Node
+node_modules/
+package-lock.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets - NEVER commit
+.env
+.env.*
+*.pem
+*.key
+
+# BMAD output (generated artifacts, not source-controlled by default)
+# Uncomment if you want to track planning artifacts:
+# _bmad-output/
