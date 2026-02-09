@@ -1,0 +1,93 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: orchestack-pr-check
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+      default: main
+  workspaces:
+    - name: shared-workspace
+  tasks:
+    - name: fetch-source
+      taskRef:
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: shared-workspace
+      params:
+        - name: url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+
+    - name: lint-python
+      runAfter: [fetch-source]
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: lint
+            image: python:3.12-slim
+            workingDir: $(workspaces.source.path)
+            script: |
+              pip install ruff
+              ruff check libs/ services/ connectors/
+              ruff format --check libs/ services/ connectors/
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: lint-go
+      runAfter: [fetch-source]
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: lint
+            image: golang:1.23
+            workingDir: $(workspaces.source.path)
+            script: |
+              for dir in libs/envelope-go services/session-scheduler services/task-dispatcher services/policy-evaluator services/daytona-executor services/extension-controller; do
+                cd $dir && go vet ./... && cd $(workspaces.source.path)
+              done
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: test-python
+      runAfter: [lint-python]
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: test
+            image: python:3.12-slim
+            workingDir: $(workspaces.source.path)
+            script: |
+              pip install pytest
+              pip install -e libs/envelope-py[dev]
+              python -m pytest libs/ -v
+      workspaces:
+        - name: source
+          workspace: shared-workspace
+
+    - name: test-go
+      runAfter: [lint-go]
+      taskSpec:
+        workspaces:
+          - name: source
+        steps:
+          - name: test
+            image: golang:1.23
+            workingDir: $(workspaces.source.path)
+            script: |
+              for dir in libs/envelope-go services/session-scheduler services/task-dispatcher services/policy-evaluator services/daytona-executor services/extension-controller; do
+                cd $dir && go test ./... && cd $(workspaces.source.path)
+              done
+      workspaces:
+        - name: source
+          workspace: shared-workspace

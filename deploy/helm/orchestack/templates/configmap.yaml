@@ -1,0 +1,34 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "orchestack.fullname" . }}-config
+  labels:
+    {{- include "orchestack.labels" . | nindent 4 }}
+data:
+  NATS_URL: {{ printf "nats://%s-nats:4222" .Release.Name | quote }}
+  MINIO_ENDPOINT: {{ printf "http://%s-minio:9000" .Release.Name | quote }}
+  VAULT_ADDR: {{ .Values.vault.externalAddr | default (printf "http://%s-vault:8200" .Release.Name) | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ printf "http://%s-otel-collector:4317" .Release.Name | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "orchestack.fullname" . }}-nats-init
+  labels:
+    {{- include "orchestack.labels" . | nindent 4 }}
+data:
+  nats-init.sh: |
+    #!/bin/sh
+    set -e
+    NATS_URL="{{ printf "nats://%s-nats:4222" .Release.Name }}"
+
+    until nats server check connection --server="$NATS_URL" 2>/dev/null; do
+      sleep 1
+    done
+
+    nats stream add STREAM_TASKS --server="$NATS_URL" --subjects="tasks.>" --retention=work --max-age=7d --storage=file --replicas=1 --discard=old --dupe-window=2m --deny-delete --deny-purge 2>/dev/null || true
+    nats stream add STREAM_EVENTS --server="$NATS_URL" --subjects="ingress.>,memory.>,router.>,heartbeat.>,egress.>,payments.>,trust.>,ext.>" --retention=limits --max-age=24h --storage=file --replicas=1 --discard=old --dupe-window=2m 2>/dev/null || true
+    nats stream add STREAM_AUDIT --server="$NATS_URL" --subjects="audit.>" --retention=limits --max-age=90d --storage=file --replicas=1 --discard=old --dupe-window=2m --deny-delete --deny-purge 2>/dev/null || true
+
+    echo "NATS streams initialized"

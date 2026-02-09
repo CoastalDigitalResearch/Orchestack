@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orchestack.dev/schemas/envelope/v1.0",
+  "title": "Orchestack Event Envelope",
+  "description": "RFC-001 §5.1 compliant event envelope for all inter-service communication",
+  "type": "object",
+  "required": ["version", "event_id", "event_type", "timestamp", "actor", "tenant_id"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1.0"],
+      "description": "Envelope schema version"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$",
+      "description": "ULID uniquely identifying this event"
+    },
+    "event_type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*([.][a-z][a-z0-9_]*)*$",
+      "description": "Dot-separated event type (e.g., ingress.discord.message, tasks.create)",
+      "examples": [
+        "ingress.discord.message",
+        "tasks.create",
+        "tasks.run.step.completed",
+        "router.request",
+        "memory.write.completed",
+        "audit.toolcall"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp in UTC"
+    },
+    "actor": {
+      "$ref": "#/$defs/Actor"
+    },
+    "tenant_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Tenant identifier for multi-tenancy isolation"
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Links related events across a workflow"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^idem:[^:]+:[^:]+:[0-9]+:[^:]+:[0-9]+$",
+      "description": "Dedup key: idem:{tenant}:{task_id}:{run_attempt}:{step_type}:{step_seq}"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 0,
+      "description": "Event priority (0=normal, 10=critical)"
+    },
+    "payload_ref": {
+      "type": "string",
+      "pattern": "^s3://[^/]+/.+$",
+      "description": "S3 URI for large payloads stored in object storage"
+    },
+    "schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the payload schema"
+    },
+    "trace": {
+      "$ref": "#/$defs/TraceContext"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Inline event payload (use payload_ref for large payloads)"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["user", "agent", "system", "connector"],
+          "description": "Actor category"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for the actor"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable display name"
+        }
+      },
+      "additionalProperties": false
+    },
+    "TraceContext": {
+      "type": "object",
+      "properties": {
+        "traceparent": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$",
+          "description": "W3C traceparent header"
+        },
+        "tracestate": {
+          "type": "string",
+          "description": "W3C tracestate header"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

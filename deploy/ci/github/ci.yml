@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.23"
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install ruff
+      - run: ruff check libs/ services/ connectors/
+      - run: ruff format --check libs/ services/ connectors/
+
+  lint-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: |
+          for dir in libs/envelope-go services/session-scheduler services/task-dispatcher services/policy-evaluator services/daytona-executor services/extension-controller; do
+            echo "Vetting $dir..."
+            cd $dir && go vet ./... && cd $GITHUB_WORKSPACE
+          done
+
+  test-python:
+    runs-on: ubuntu-latest
+    needs: lint-python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: |
+          pip install pytest
+          pip install -e libs/envelope-py[dev]
+      - run: python -m pytest libs/ -v
+
+  test-go:
+    runs-on: ubuntu-latest
+    needs: lint-go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: |
+          for dir in libs/envelope-go services/session-scheduler services/task-dispatcher services/policy-evaluator services/daytona-executor services/extension-controller; do
+            echo "Testing $dir..."
+            cd $dir && go test ./... && cd $GITHUB_WORKSPACE
+          done
+
+  build-images:
+    runs-on: ubuntu-latest
+    needs: [test-python, test-go]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service:
+          - name: session-scheduler
+            dockerfile: deploy/compose/Containerfile.go
+          - name: task-dispatcher
+            dockerfile: deploy/compose/Containerfile.go
+          - name: policy-evaluator
+            dockerfile: deploy/compose/Containerfile.go
+          - name: daytona-executor
+            dockerfile: deploy/compose/Containerfile.go
+          - name: extension-controller
+            dockerfile: deploy/compose/Containerfile.go
+          - name: loop-runner
+            dockerfile: deploy/compose/Containerfile.python
+          - name: model-router
+            dockerfile: deploy/compose/Containerfile.python
+          - name: budget-accounting
+            dockerfile: deploy/compose/Containerfile.python
+          - name: memory-plane
+            dockerfile: deploy/compose/Containerfile.python
+          - name: dlp-scanner
+            dockerfile: deploy/compose/Containerfile.python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          build-args: SERVICE=${{ matrix.service.name }}
+          push: false
+          tags: orchestack/${{ matrix.service.name }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

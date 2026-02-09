@@ -9,6 +9,10 @@ venv/
 
 # Go
 /vendor/
+/_build/
+
+# Test artifacts
+.pytest_cache/
 
 # Node
 node_modules/

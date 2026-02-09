@@ -1,0 +1,24 @@
+{{- if and .Values.openshift.enabled .Values.openshift.route.enabled }}
+{{- if .Values.connectors.webchat.enabled }}
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "orchestack.fullname" . }}-webchat
+  labels:
+    {{- include "orchestack.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.openshift.route.host }}
+  host: {{ .Values.openshift.route.host }}
+  {{- end }}
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: {{ include "orchestack.fullname" . }}-webchat
+    weight: 100
+{{- end }}
+{{- end }}

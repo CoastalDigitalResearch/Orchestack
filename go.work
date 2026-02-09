@@ -1,0 +1,12 @@
+go 1.23
+
+use (
+	./deploy/operator
+	./libs/envelope-go
+	./libs/telemetry-go
+	./services/daytona-executor
+	./services/extension-controller
+	./services/policy-evaluator
+	./services/session-scheduler
+	./services/task-dispatcher
+)

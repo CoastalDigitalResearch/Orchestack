@@ -1,0 +1,213 @@
+# Orchestack Helm Chart Values
+# OpenShift-compatible defaults
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Infrastructure toggles - set false to use external services
+nats:
+  enabled: true
+  jetstream:
+    enabled: true
+    fileStorage:
+      size: 10Gi
+
+postgresql:
+  enabled: true
+  auth:
+    database: orchestack
+    username: orchestack
+    existingSecret: orchestack-db-secret
+
+minio:
+  enabled: true
+  replicas: 1
+  persistence:
+    size: 50Gi
+  buckets:
+    - name: homarus-memory
+    - name: homarus-artifacts
+    - name: homarus-audit-export
+
+vault:
+  enabled: false  # Typically pre-existing in enterprise
+  externalAddr: ""
+
+# Service configuration
+services:
+  sessionScheduler:
+    replicas: 2
+    image:
+      repository: orchestack/session-scheduler
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+  taskDispatcher:
+    replicas: 2
+    image:
+      repository: orchestack/task-dispatcher
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+  policyEvaluator:
+    replicas: 2
+    image:
+      repository: orchestack/policy-evaluator
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+  loopRunner:
+    replicas: 3
+    image:
+      repository: orchestack/loop-runner
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
+
+  modelRouter:
+    replicas: 2
+    image:
+      repository: orchestack/model-router
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+
+  budgetAccounting:
+    replicas: 1
+    image:
+      repository: orchestack/budget-accounting
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  memoryPlane:
+    replicas: 2
+    image:
+      repository: orchestack/memory-plane
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "2"
+        memory: 4Gi
+
+  dlpScanner:
+    replicas: 1
+    image:
+      repository: orchestack/dlp-scanner
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+  extensionController:
+    replicas: 1
+    image:
+      repository: orchestack/extension-controller
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
+# Connectors
+connectors:
+  discord:
+    enabled: false
+    replicas: 1
+    image:
+      repository: orchestack/connector-discord
+      tag: "0.1.0"
+
+  slack:
+    enabled: false
+    replicas: 1
+    image:
+      repository: orchestack/connector-slack
+      tag: "0.1.0"
+
+  email:
+    enabled: false
+    replicas: 1
+    image:
+      repository: orchestack/connector-email
+      tag: "0.1.0"
+
+  telegram:
+    enabled: false
+    replicas: 1
+    image:
+      repository: orchestack/connector-telegram
+      tag: "0.1.0"
+
+  webchat:
+    enabled: true
+    replicas: 1
+    image:
+      repository: orchestack/connector-webchat
+      tag: "0.1.0"
+
+# Observability
+observability:
+  enabled: true
+  otelCollector:
+    enabled: true
+  jaeger:
+    enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+
+# OpenShift-specific
+openshift:
+  enabled: false
+  route:
+    enabled: true
+    host: ""
+  securityContextConstraints:
+    create: true

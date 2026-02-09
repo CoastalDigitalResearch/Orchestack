@@ -1,0 +1,84 @@
+{{/*
+Generic deployment template for Orchestack services.
+Used by defining a range over services.
+*/}}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "orchestack.fullname" $ }}-{{ $name | kebabcase }}
+  labels:
+    {{- include "orchestack.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name | kebabcase }}
+    app.kubernetes.io/component: service
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name | kebabcase }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name | kebabcase }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/part-of: orchestack
+    spec:
+      securityContext:
+        {{- include "orchestack.securityContext" $ | nindent 8 }}
+      containers:
+        - name: {{ $name | kebabcase }}
+          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            {{- include "orchestack.containerSecurityContext" $ | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- include "orchestack.commonEnv" $ | nindent 12 }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ $name | kebabcase }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "orchestack.fullname" $ }}-{{ $name | kebabcase }}
+  labels:
+    {{- include "orchestack.labels" $ | nindent 4 }}
+    app.kubernetes.io/name: {{ $name | kebabcase }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ $name | kebabcase }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+{{- end }}
