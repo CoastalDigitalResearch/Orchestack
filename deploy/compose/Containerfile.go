@@ -4,13 +4,13 @@ FROM golang:1.23-alpine AS builder
 ARG SERVICE
 WORKDIR /build
 
-# Copy go workspace and modules
-COPY go.work go.work
+# Copy local libs and service module
 COPY libs/envelope-go/ libs/envelope-go/
 COPY libs/telemetry-go/ libs/telemetry-go/
 COPY services/${SERVICE}/ services/${SERVICE}/
 
-RUN cd services/${SERVICE} && go build -o /app ./cmd
+ENV GOWORK=off
+RUN cd services/${SERVICE} && go build -o /app ./cmd/${SERVICE}
 
 # Runtime
 FROM alpine:3.19

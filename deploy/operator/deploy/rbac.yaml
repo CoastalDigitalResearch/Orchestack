@@ -1,0 +1,83 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchestack-operator
+  namespace: orchestack-system
+  labels:
+    app.kubernetes.io/name: orchestack-operator
+    app.kubernetes.io/part-of: orchestack
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: orchestack-operator
+  labels:
+    app.kubernetes.io/name: orchestack-operator
+    app.kubernetes.io/part-of: orchestack
+rules:
+  # OrchestackPlatform CRD
+  - apiGroups: ["orchestack.io"]
+    resources: ["orchestackplatforms"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["orchestack.io"]
+    resources: ["orchestackplatforms/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["orchestack.io"]
+    resources: ["orchestackplatforms/finalizers"]
+    verbs: ["update"]
+
+  # Core workload resources managed by the operator
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "secrets", "serviceaccounts", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+  # Networking
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # RBAC (operator may create per-service roles)
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Batch (CronJobs for maintenance tasks)
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # OpenShift Routes (optional, only used when openshift.enabled=true)
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Leader election
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orchestack-operator
+  labels:
+    app.kubernetes.io/name: orchestack-operator
+    app.kubernetes.io/part-of: orchestack
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: orchestack-operator
+subjects:
+  - kind: ServiceAccount
+    name: orchestack-operator
+    namespace: orchestack-system

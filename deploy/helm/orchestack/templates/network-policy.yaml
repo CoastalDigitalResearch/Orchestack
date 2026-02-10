@@ -94,6 +94,33 @@ spec:
         - protocol: TCP
           port: 9000
 ---
+# Allow services to reach Vault (external or in-cluster)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "orchestack.fullname" . }}-allow-vault
+  labels:
+    {{- include "orchestack.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: orchestack
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+---
 # Allow health check probes from kubelet
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

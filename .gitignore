@@ -10,6 +10,7 @@ venv/
 # Go
 /vendor/
 /_build/
+/cmd
 
 # Test artifacts
 .pytest_cache/

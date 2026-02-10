@@ -1,6 +1,6 @@
 """Tests for the envelope library."""
 
-from orchestack_envelope import Actor, Envelope, TraceContext, generate_idempotency_key, validate_envelope
+from orchestack_envelope import Actor, Envelope, generate_idempotency_key, validate_envelope
 
 
 class TestEnvelope:

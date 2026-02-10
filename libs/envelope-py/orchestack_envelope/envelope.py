@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import ulid
@@ -31,7 +30,7 @@ class Envelope(BaseModel):
     version: str = "1.0"
     event_id: str = Field(default_factory=lambda: str(ulid.new()))
     event_type: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     actor: Actor
     tenant_id: str
     correlation_id: str | None = None

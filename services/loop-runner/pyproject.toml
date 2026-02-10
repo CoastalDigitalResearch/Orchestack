@@ -10,5 +10,6 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "nats-py>=2.7",
+    "pydantic-settings>=2.0",
     "orchestack-envelope",
 ]

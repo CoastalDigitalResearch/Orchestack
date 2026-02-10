@@ -1,6 +1,30 @@
 version: "3.9"
 
+x-common-env: &common-env
+  NATS_URL: nats://nats:4222
+  DATABASE_URL: postgres://orchestack:orchestack-dev@postgres:5432/orchestack?sslmode=disable
+  MINIO_ENDPOINT: minio:9000
+  MINIO_ACCESS_KEY: orchestack
+  MINIO_SECRET_KEY: orchestack-dev
+  VAULT_ADDR: http://vault:8200
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+x-common-depends: &common-depends
+  nats:
+    condition: service_healthy
+  postgres:
+    condition: service_healthy
+
+x-healthcheck: &healthcheck
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
 services:
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
   nats:
     image: nats:2.10-alpine
     command: ["--jetstream", "--store_dir", "/data", "-p", "4222", "-m", "8222"]
@@ -63,6 +87,18 @@ services:
       exit 0;
       "
 
+  nats-init:
+    image: natsio/nats-box:latest
+    depends_on:
+      nats:
+        condition: service_healthy
+    environment:
+      NATS_URL: nats://nats:4222
+    volumes:
+      - ./nats-init.sh:/nats-init.sh:ro
+    command: ["/bin/sh", "/nats-init.sh"]
+    restart: "no"
+
   vault:
     image: hashicorp/vault:1.15
     cap_add:
@@ -77,6 +113,311 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  vault-init:
+    image: hashicorp/vault:1.15
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: orchestack-dev-token
+    volumes:
+      - ./vault-init.sh:/vault-init.sh:ro
+    entrypoint: ["/bin/sh", "/vault-init.sh"]
+    restart: "no"
+
+  otel-collector:
+    image: jaegertracing/opentelemetry-collector:latest
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    depends_on:
+      jaeger:
+        condition: service_started
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Go services
+  # ---------------------------------------------------------------------------
+  session-scheduler:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.go
+      args:
+        SERVICE: session-scheduler
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  task-dispatcher:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.go
+      args:
+        SERVICE: task-dispatcher
+    ports:
+      - "8081:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  policy-evaluator:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.go
+      args:
+        SERVICE: policy-evaluator
+    ports:
+      - "8082:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  daytona-executor:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.go
+      args:
+        SERVICE: daytona-executor
+    ports:
+      - "8083:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  extension-controller:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.go
+      args:
+        SERVICE: extension-controller
+    ports:
+      - "8084:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/healthz"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Python services
+  # ---------------------------------------------------------------------------
+  loop-runner:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.python
+      args:
+        SERVICE: loop-runner
+    ports:
+      - "8090:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  model-router:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.python
+      args:
+        SERVICE: model-router
+    ports:
+      - "8091:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  budget-accounting:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.python
+      args:
+        SERVICE: budget-accounting
+    ports:
+      - "8092:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  memory-plane:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.python
+      args:
+        SERVICE: memory-plane
+    ports:
+      - "8093:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  dlp-scanner:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.python
+      args:
+        SERVICE: dlp-scanner
+    ports:
+      - "8094:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Connectors (profiles control which start by default)
+  # ---------------------------------------------------------------------------
+  connector-discord:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.connector
+      args:
+        SERVICE: discord
+    ports:
+      - "8100:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  connector-slack:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.connector
+      args:
+        SERVICE: slack
+    ports:
+      - "8101:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  connector-email:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.connector
+      args:
+        SERVICE: email
+    ports:
+      - "8102:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  connector-telegram:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.connector
+      args:
+        SERVICE: telegram
+    ports:
+      - "8103:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+    profiles:
+      - connectors
+
+  connector-webchat:
+    build:
+      context: ../../
+      dockerfile: deploy/compose/Containerfile.connector
+      args:
+        SERVICE: webchat
+    ports:
+      - "8104:8080"
+    environment:
+      <<: *common-env
+    depends_on:
+      <<: *common-depends
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"]
+      <<: *healthcheck
+    restart: unless-stopped
+    profiles:
+      - webchat
 
 volumes:
   nats-data:

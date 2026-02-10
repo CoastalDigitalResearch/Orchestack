@@ -35,11 +35,11 @@ test-go: ## Run Go tests
 build: build-go build-images ## Build everything
 
 build-go: ## Build Go binaries
-	cd services/session-scheduler && go build -o ../../_build/session-scheduler ./cmd
-	cd services/task-dispatcher && go build -o ../../_build/task-dispatcher ./cmd
-	cd services/policy-evaluator && go build -o ../../_build/policy-evaluator ./cmd
-	cd services/daytona-executor && go build -o ../../_build/daytona-executor ./cmd
-	cd services/extension-controller && go build -o ../../_build/extension-controller ./cmd
+	cd services/session-scheduler && go build -o ../../_build/session-scheduler ./cmd/session-scheduler
+	cd services/task-dispatcher && go build -o ../../_build/task-dispatcher ./cmd/task-dispatcher
+	cd services/policy-evaluator && go build -o ../../_build/policy-evaluator ./cmd/policy-evaluator
+	cd services/daytona-executor && go build -o ../../_build/daytona-executor ./cmd/daytona-executor
+	cd services/extension-controller && go build -o ../../_build/extension-controller ./cmd/extension-controller
 
 build-images: ## Build container images
 	docker build -f deploy/compose/Containerfile.go -t orchestack/session-scheduler --build-arg SERVICE=session-scheduler .

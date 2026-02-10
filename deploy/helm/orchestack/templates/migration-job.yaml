@@ -22,17 +22,10 @@ spec:
         {{- include "orchestack.securityContext" . | nindent 8 }}
       containers:
         - name: migrate
-          image: arigaio/atlas:latest
+          image: postgres:16-alpine
           securityContext:
             {{- include "orchestack.containerSecurityContext" . | nindent 12 }}
-          command:
-            - atlas
-            - migrate
-            - apply
-            - --url
-            - $(DATABASE_URL)
-            - --dir
-            - file:///migrations
+          command: ["/bin/sh", "/migrations/init.sh"]
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -43,10 +36,14 @@ spec:
             - name: migrations
               mountPath: /migrations
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
       volumes:
         - name: migrations
           configMap:
             name: {{ include "orchestack.fullname" . }}-migrations
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: batch/v1
 kind: Job

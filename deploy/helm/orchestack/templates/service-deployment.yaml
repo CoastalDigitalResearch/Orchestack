@@ -29,7 +29,7 @@ spec:
         {{- include "orchestack.securityContext" $ | nindent 8 }}
       containers:
         - name: {{ $name | kebabcase }}
-          image: "{{ $svc.image.repository }}:{{ $svc.image.tag }}"
+          image: "{{ if $.Values.global.imageRegistry }}{{ $.Values.global.imageRegistry }}/{{ end }}{{ $svc.image.repository }}:{{ $svc.image.tag }}"
           imagePullPolicy: IfNotPresent
           securityContext:
             {{- include "orchestack.containerSecurityContext" $ | nindent 12 }}

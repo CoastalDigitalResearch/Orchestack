@@ -1,0 +1,525 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orchestack.io/schemas/extension-manifest.schema.json",
+  "title": "Orchestack Extension Manifest",
+  "description": "JSON Schema for Orchestack extension.yaml manifests (apiVersion orchestack.io/v1alpha1)",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "orchestack.io/v1alpha1",
+      "description": "API version for the extension manifest"
+    },
+    "kind": {
+      "type": "string",
+      "const": "Extension",
+      "description": "Resource kind, always Extension"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/Spec"
+    },
+    "security": {
+      "$ref": "#/$defs/Security"
+    }
+  },
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "description": "Unique extension name (DNS-compatible)"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$",
+          "description": "SemVer version string"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Human-readable description of the extension"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author name or organisation"
+        },
+        "license": {
+          "type": "string",
+          "description": "SPDX license identifier"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]{1,64}$"
+          },
+          "uniqueItems": true,
+          "description": "Discovery tags for the extension"
+        },
+        "trustTier": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Trust tier: 0=built-in, 1=verified, 2=community, 3=untrusted"
+        }
+      }
+    },
+    "Spec": {
+      "type": "object",
+      "oneOf": [
+        { "$ref": "#/$defs/ToolSpec" },
+        { "$ref": "#/$defs/SkillSpec" },
+        { "$ref": "#/$defs/MemorySpec" },
+        { "$ref": "#/$defs/StorageSpec" },
+        { "$ref": "#/$defs/LoopSpec" },
+        { "$ref": "#/$defs/ScheduleSpec" },
+        { "$ref": "#/$defs/ConnectorSpec" }
+      ]
+    },
+    "ToolDescriptor": {
+      "type": "object",
+      "required": ["tool_id", "name", "description", "input_schema", "output_schema"],
+      "additionalProperties": false,
+      "properties": {
+        "tool_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+          "description": "Globally unique tool identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable tool name"
+        },
+        "description": {
+          "type": "string",
+          "description": "What the tool does"
+        },
+        "input_schema": {
+          "type": "object",
+          "description": "JSON Schema describing the tool input"
+        },
+        "output_schema": {
+          "type": "object",
+          "description": "JSON Schema describing the tool output"
+        },
+        "risk_class": {
+          "type": "string",
+          "enum": ["read_only", "write_local", "write_external", "destructive"],
+          "default": "read_only",
+          "description": "Risk classification for the tool"
+        },
+        "idempotency": {
+          "type": "string",
+          "enum": ["idempotent", "non_idempotent"],
+          "default": "non_idempotent",
+          "description": "Whether repeated invocations produce the same result"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "description": "Required runtime capabilities (e.g. fs.read, net.egress)"
+        },
+        "data_classification": {
+          "type": "string",
+          "enum": ["public", "internal", "sensitive", "restricted"],
+          "default": "internal",
+          "description": "Data sensitivity classification"
+        },
+        "audit_level": {
+          "type": "string",
+          "enum": ["none", "metadata", "full"],
+          "default": "metadata",
+          "description": "Audit logging level for invocations"
+        }
+      }
+    },
+    "ToolSpec": {
+      "type": "object",
+      "required": ["type", "toolDescriptor", "runtime"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "tool"
+        },
+        "toolDescriptor": {
+          "$ref": "#/$defs/ToolDescriptor"
+        },
+        "runtime": {
+          "type": "string",
+          "enum": ["sandbox", "service", "native"],
+          "description": "Execution runtime: sandbox (Bubblewrap/gVisor), service (long-running), native (host)"
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string",
+              "description": "OCI image reference"
+            },
+            "containerfile": {
+              "type": "string",
+              "description": "Path to Containerfile / Dockerfile"
+            },
+            "entrypoint": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Container entrypoint override"
+            },
+            "resources": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "cpu_limit": { "type": "string" },
+                "memory_limit": { "type": "string" },
+                "timeout_seconds": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "SkillSpec": {
+      "type": "object",
+      "required": ["type", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "skill"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "tool": { "type": "string" },
+              "prompt": { "type": "string" },
+              "condition": { "type": "string" },
+              "retry": {
+                "type": "object",
+                "properties": {
+                  "max_attempts": { "type": "integer", "minimum": 1 },
+                  "backoff": { "type": "string", "enum": ["fixed", "exponential"] }
+                }
+              }
+            }
+          },
+          "description": "Ordered steps the skill executes"
+        },
+        "parameters": {
+          "type": "object",
+          "description": "JSON Schema for skill input parameters"
+        },
+        "guardrails": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_steps": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum total steps before aborting"
+            },
+            "max_cost_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Budget cap in USD"
+            },
+            "require_approval": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Tool IDs that require human approval before execution"
+            },
+            "forbidden_tools": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Tool IDs that must never be invoked"
+            }
+          }
+        }
+      }
+    },
+    "MemorySpec": {
+      "type": "object",
+      "required": ["type", "endpoint", "protocol"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "memory"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Connection endpoint (e.g. nats://memory-svc:4222)"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": ["nats", "grpc", "http"],
+          "description": "Wire protocol for memory operations"
+        }
+      }
+    },
+    "StorageSpec": {
+      "type": "object",
+      "required": ["type", "endpoint", "protocol"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "storage"
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Connection endpoint"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": ["s3", "gcs", "nats-objectstore", "local"],
+          "description": "Storage protocol"
+        }
+      }
+    },
+    "LoopSpec": {
+      "type": "object",
+      "required": ["type", "steps", "state_machine"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "loop"
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "action": { "type": "string" },
+              "on_success": { "type": "string" },
+              "on_failure": { "type": "string" }
+            }
+          },
+          "description": "Loop iteration steps"
+        },
+        "state_machine": {
+          "type": "object",
+          "required": ["initial_state", "states"],
+          "additionalProperties": false,
+          "properties": {
+            "initial_state": {
+              "type": "string",
+              "description": "Name of the starting state"
+            },
+            "states": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "transitions": {
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                  },
+                  "terminal": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              },
+              "description": "Named states with transitions"
+            }
+          }
+        }
+      }
+    },
+    "ScheduleSpec": {
+      "type": "object",
+      "required": ["type", "cron", "task_template"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "schedule"
+        },
+        "cron": {
+          "type": "string",
+          "description": "Cron expression (5-field or 6-field with seconds)"
+        },
+        "timezone": {
+          "type": "string",
+          "default": "UTC",
+          "description": "IANA timezone for the schedule"
+        },
+        "concurrency_policy": {
+          "type": "string",
+          "enum": ["allow", "forbid", "replace"],
+          "default": "forbid",
+          "description": "How to handle overlapping runs"
+        },
+        "missed_run_policy": {
+          "type": "string",
+          "enum": ["skip", "run_once", "run_all"],
+          "default": "skip",
+          "description": "What to do when a scheduled run was missed"
+        },
+        "task_template": {
+          "type": "object",
+          "required": ["tool"],
+          "properties": {
+            "tool": {
+              "type": "string",
+              "description": "Tool ID to invoke"
+            },
+            "input": {
+              "type": "object",
+              "description": "Static input to pass to the tool"
+            }
+          },
+          "description": "Template for the task that runs on each trigger"
+        }
+      }
+    },
+    "ConnectorSpec": {
+      "type": "object",
+      "required": ["type", "connector_type", "protocol"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "connector"
+        },
+        "connector_type": {
+          "type": "string",
+          "enum": ["inbound", "outbound", "bidirectional"],
+          "description": "Direction of the connector"
+        },
+        "protocol": {
+          "type": "string",
+          "enum": ["rest", "graphql", "grpc", "websocket", "webhook", "mcp"],
+          "description": "Wire protocol the connector speaks"
+        }
+      }
+    },
+    "Security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "signing": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether the extension image must be signed"
+            },
+            "cosign": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "public_key": {
+                  "type": "string",
+                  "description": "Path or URL to the cosign public key"
+                },
+                "transparency_log": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether to use Rekor transparency log"
+                }
+              }
+            }
+          }
+        },
+        "sbom": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Path to the SBOM file (CycloneDX or SPDX)"
+            },
+            "format": {
+              "type": "string",
+              "enum": ["cyclonedx", "spdx"],
+              "default": "cyclonedx"
+            }
+          }
+        },
+        "vuln_scan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_cvss": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10,
+              "description": "Maximum allowed CVSS score; anything above blocks deployment"
+            },
+            "ignore_unfixed": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "env_var"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Logical name of the secret"
+              },
+              "env_var": {
+                "type": "string",
+                "description": "Environment variable to inject the secret as"
+              },
+              "vault_path": {
+                "type": "string",
+                "description": "Optional Vault KV path override"
+              }
+            }
+          },
+          "description": "Secrets the extension requires at runtime"
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "egress_allowed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "description": "CIDR, hostname, or hostname:port that the extension may reach"
+              },
+              "description": "Allowlist of egress destinations"
+            },
+            "ingress_port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "Port the extension listens on (service runtime only)"
+            }
+          }
+        }
+      }
+    }
+  }
+}

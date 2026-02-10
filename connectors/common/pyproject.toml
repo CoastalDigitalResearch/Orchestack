@@ -5,8 +5,22 @@ build-backend = "hatchling.build"
 [project]
 name = "orchestack-connector-common"
 version = "0.1.0"
+description = "Shared connector framework for the Orchestack platform"
 requires-python = ">=3.12"
 dependencies = [
     "nats-py>=2.7",
-    "orchestack-envelope",
+    "asyncpg>=0.29",
+    "minio>=7.2",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["orchestack_connector"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.2",
 ]

@@ -154,6 +154,19 @@ services:
         cpu: "1"
         memory: 512Mi
 
+  daytonaExecutor:
+    replicas: 1
+    image:
+      repository: orchestack/daytona-executor
+      tag: "0.1.0"
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+
 # Connectors
 connectors:
   discord:

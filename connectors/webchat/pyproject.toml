@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchestack-connector-webchat"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "orchestack-connector-common",
+    "nats-py>=2.7",
+    "pydantic-settings>=2.0",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "websockets>=12.0",
+]

@@ -11,4 +11,8 @@ dependencies = [
     "uvicorn>=0.30",
     "nats-py>=2.7",
     "orchestack-envelope",
+    "pydantic-settings>=2.0",
+    "asyncpg>=0.29",
+    "minio>=7.2",
+    "ulid-py>=1.1",
 ]

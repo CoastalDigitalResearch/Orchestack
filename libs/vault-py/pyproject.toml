@@ -5,5 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "orchestack-vault"
 version = "0.1.0"
+description = "Orchestack Vault integration library"
 requires-python = ">=3.12"
-dependencies = ["hvac>=2.1"]
+dependencies = [
+    "hvac>=2.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]

@@ -19,11 +19,19 @@ RUN pip install --no-cache-dir --prefix=/install \
 
 # Runtime
 FROM python:3.12-slim
+
+ARG SERVICE
 COPY --from=builder /install /usr/local
 COPY services/${SERVICE}/ /app/
+
+# Compute Python module name at build time (replace hyphens with underscores)
+RUN MODULE_NAME=$(echo "orchestack_${SERVICE}" | tr '-' '_') && \
+    echo '#!/bin/sh' > /entrypoint.sh && \
+    echo "exec uvicorn ${MODULE_NAME}.main:app --host 0.0.0.0 --port 8080" >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
 WORKDIR /app
 USER 65534:65534
 EXPOSE 8080
 
-CMD ["uvicorn", "orchestack_${SERVICE//-/_}.main:app", "--host", "0.0.0.0", "--port", "8080"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "orchestack-ext"
+version = "0.1.0"
+description = "Orchestack extension manifest CLI - lint, scaffold, build, and verify extensions"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+    "click>=8.1",
+    "jsonschema>=4.20",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.scripts]
+orchestack-ext = "orchestack_ext.cli:cli"
