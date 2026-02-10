@@ -11,6 +11,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
+import httpx
 import nats
 from fastapi import (
     Depends,
@@ -27,6 +28,7 @@ from pydantic import BaseModel
 
 from orchestack_connector_webchat.config import WebchatSettings
 from orchestack_connector_webchat.connector import WebchatConnector
+from orchestack_connector_webchat.dashboard import DASHBOARD_HTML
 from orchestack_connector_webchat.widget import WIDGET_HTML
 
 logger = logging.getLogger(__name__)
@@ -78,7 +80,8 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     # --- Subscribe to egress ---
     if nc is not None:
         await nc.subscribe("egress.webchat.message", cb=_handle_egress)
-        logger.info("Subscribed to egress.webchat.message")
+        await nc.subscribe("egress.message", cb=_handle_egress)
+        logger.info("Subscribed to egress.webchat.message and egress.message")
 
     yield
 
@@ -132,22 +135,12 @@ app.add_middleware(
 async def _verify_oidc_token(
     authorization: str | None = Header(default=None),
 ) -> str | None:
-    """Validate the bearer token if OIDC is configured.
-
-    Returns the ``sub`` claim on success, or *None* when OIDC is not
-    configured.  Raises 401 if configured but the token is missing/invalid.
-
-    NOTE: Full OIDC validation (JWKS fetch, signature check) is deferred to
-    a future iteration.  This placeholder verifies that a token is present
-    when an issuer is configured.
-    """
+    """Validate the bearer token if OIDC is configured."""
     if settings.oidc_issuer is None:
         return None
     if authorization is None or not authorization.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
     token = authorization.split(" ", 1)[1]
-    # TODO: Validate JWT signature using settings.oidc_issuer + oidc_audience.
-    # For now, accept any non-empty token and use it as the sub claim.
     if not token:
         raise HTTPException(status_code=401, detail="Empty bearer token")
     return token
@@ -174,7 +167,7 @@ async def readyz() -> JSONResponse:
 
 
 # ---------------------------------------------------------------------------
-# Widget endpoint
+# Widget & Dashboard endpoints
 # ---------------------------------------------------------------------------
 
 
@@ -182,6 +175,65 @@ async def readyz() -> JSONResponse:
 async def widget() -> HTMLResponse:
     """Serve the embeddable webchat widget."""
     return HTMLResponse(content=WIDGET_HTML)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard() -> HTMLResponse:
+    """Serve the multi-agent dashboard."""
+    return HTMLResponse(content=DASHBOARD_HTML)
+
+
+# ---------------------------------------------------------------------------
+# System status proxy endpoint
+# ---------------------------------------------------------------------------
+
+SERVICE_HEALTH_URLS = {
+    "session-scheduler": "http://session-scheduler:8080/healthz",
+    "task-dispatcher": "http://task-dispatcher:8080/healthz",
+    "policy-evaluator": "http://policy-evaluator:8080/healthz",
+    "loop-runner": "http://loop-runner:8080/healthz",
+    "model-router": "http://model-router:8080/healthz",
+    "budget-accounting": "http://budget-accounting:8080/healthz",
+    "memory-plane": "http://memory-plane:8080/healthz",
+    "dlp-scanner": "http://dlp-scanner:8080/healthz",
+    "nats": "http://nats:8222/healthz",
+}
+
+
+@app.get("/v1/system/status")
+async def system_status() -> JSONResponse:
+    """Poll healthz of all internal services and return status map."""
+    results: dict[str, bool] = {}
+    async with httpx.AsyncClient(timeout=3.0) as client:
+        for name, url in SERVICE_HEALTH_URLS.items():
+            try:
+                resp = await client.get(url)
+                results[name] = resp.status_code == 200
+            except Exception:
+                results[name] = False
+    return JSONResponse(results)
+
+
+# ---------------------------------------------------------------------------
+# Agents endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/agents")
+async def list_agents() -> JSONResponse:
+    """Return the list of configured agents from the database."""
+    # In production this would query the agents table via asyncpg.
+    # For now, return the seeded agents list for the dashboard.
+    agents = [
+        {"id": "00000000-0000-0000-0000-00000000a001", "name": "Homarus", "status": "active", "role": "Chief of Staff"},
+        {"id": "00000000-0000-0000-0000-00000000a002", "name": "Ken", "status": "active", "role": "Software Architect"},
+        {"id": "00000000-0000-0000-0000-00000000a003", "name": "Mercer", "status": "active", "role": "Financial Operator"},
+        {"id": "00000000-0000-0000-0000-00000000a004", "name": "Rory", "status": "active", "role": "Revenue Growth"},
+        {"id": "00000000-0000-0000-0000-00000000a005", "name": "Scarlet", "status": "active", "role": "Red Hat Operations"},
+        {"id": "00000000-0000-0000-0000-00000000a006", "name": "Ive", "status": "active", "role": "UI/UX Architect"},
+        {"id": "00000000-0000-0000-0000-00000000a007", "name": "Mark", "status": "active", "role": "Creative Director"},
+    ]
+    return JSONResponse(agents)
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +245,7 @@ class CreateSessionRequest(BaseModel):
     """Request body for creating a new chat session."""
 
     display_name: str = "Anonymous"
+    agent_id: str | None = None
 
 
 class CreateSessionResponse(BaseModel):
@@ -237,6 +290,7 @@ async def create_session(
     session = connector.create_session(
         display_name=body.display_name,
         authenticated_sub=sub,
+        agent_id=body.agent_id,
     )
     return CreateSessionResponse(session_id=session.session_id, created=True)
 

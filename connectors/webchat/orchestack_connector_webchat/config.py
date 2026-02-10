@@ -13,7 +13,7 @@ class WebchatSettings(BaseSettings):
     the NATS URL is read from ``ORCHESTACK_WEBCHAT_NATS_URL``.
     """
 
-    model_config = {"env_prefix": "ORCHESTACK_WEBCHAT_"}
+    model_config = {"env_prefix": ""}
 
     nats_url: str = Field(
         default="nats://localhost:4222",

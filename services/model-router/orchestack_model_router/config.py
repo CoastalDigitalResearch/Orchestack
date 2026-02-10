@@ -8,7 +8,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Model Router configuration, populated from environment variables."""
 
-    model_config = {"env_prefix": "ORCHESTACK_", "case_sensitive": False}
+    model_config = {"env_prefix": "", "case_sensitive": False}
 
     # NATS
     nats_url: str = "nats://localhost:4222"

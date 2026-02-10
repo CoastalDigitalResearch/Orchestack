@@ -1,14 +1,15 @@
 # Multi-stage build for Python connector services
-# SERVICE arg is the connector name (e.g., "discord", "webchat")
+# CONNECTOR arg is the connector name (e.g., "discord", "webchat")
 FROM python:3.12-slim AS builder
 
-ARG SERVICE
+ARG CONNECTOR
+ARG SERVICE=${CONNECTOR}
 WORKDIR /build
 
 # Install dependencies
 COPY libs/ libs/
 COPY connectors/common/ connectors/common/
-COPY connectors/${SERVICE}/ connectors/${SERVICE}/
+COPY connectors/${CONNECTOR}/ connectors/${CONNECTOR}/
 
 RUN pip install --no-cache-dir --prefix=/install \
     ./libs/envelope-py \
@@ -16,17 +17,17 @@ RUN pip install --no-cache-dir --prefix=/install \
     ./libs/storage-py \
     ./libs/vault-py \
     ./connectors/common \
-    ./connectors/${SERVICE}
+    ./connectors/${CONNECTOR}
 
 # Runtime
 FROM python:3.12-slim
 
-ARG SERVICE
+ARG CONNECTOR
 COPY --from=builder /install /usr/local
-COPY connectors/${SERVICE}/ /app/
+COPY connectors/${CONNECTOR}/ /app/
 
 # Compute module name at build time (orchestack_connector_<name>)
-RUN MODULE_NAME=$(echo "orchestack_connector_${SERVICE}" | tr '-' '_') && \
+RUN MODULE_NAME=$(echo "orchestack_connector_${CONNECTOR}" | tr '-' '_') && \
     echo '#!/bin/sh' > /entrypoint.sh && \
     echo "exec uvicorn ${MODULE_NAME}.main:app --host 0.0.0.0 --port 8080" >> /entrypoint.sh && \
     chmod +x /entrypoint.sh

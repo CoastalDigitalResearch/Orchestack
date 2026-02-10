@@ -11,5 +11,6 @@ class Settings(BaseSettings):
     max_iterations: int = 20
     max_tool_calls: int = 50
     default_wall_time_s: int = 3600
+    model_router_url: str = "http://model-router:8080"
 
     model_config = {"env_prefix": "", "case_sensitive": False}

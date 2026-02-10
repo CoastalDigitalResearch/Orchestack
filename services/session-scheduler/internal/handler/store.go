@@ -34,8 +34,9 @@ type Task struct {
 
 // SessionStore defines the persistence interface
 type SessionStore interface {
-	ResolveSession(ctx context.Context, tenantID, connectorType, accountID, threadID string) (*Session, error)
+	ResolveSession(ctx context.Context, tenantID, connectorType, accountID, threadID, agentID string) (*Session, error)
 	PersistIngress(ctx context.Context, sessionID string, event IngressEvent) (*IngressMessage, error)
 	ShouldCreateTask(ctx context.Context, sessionID string) (bool, error)
 	CreateTask(ctx context.Context, session *Session, ingress *IngressMessage) (*Task, error)
+	GetDefaultAgent(ctx context.Context, tenantID string) (string, error)
 }

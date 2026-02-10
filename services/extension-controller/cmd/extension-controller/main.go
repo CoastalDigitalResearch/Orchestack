@@ -24,7 +24,7 @@ func main() {
 	// -----------------------------------------------------------------------
 	// Configuration (env vars with sensible defaults)
 	// -----------------------------------------------------------------------
-	port := envOrDefault("PORT", "8084")
+	port := envOrDefault("PORT", "8080")
 	pgDSN := envOrDefault("DATABASE_URL", "postgres://orchestack:orchestack@localhost:5432/orchestack?sslmode=disable")
 	natsURL := envOrDefault("NATS_URL", nats.DefaultURL)
 	repoPath := envOrDefault("GIT_REPO_PATH", "/data/config-repo")

@@ -17,7 +17,19 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 	return &PostgresStore{db: db}
 }
 
-func (s *PostgresStore) ResolveSession(ctx context.Context, tenantID, connectorType, accountID, threadID string) (*handler.Session, error) {
+func (s *PostgresStore) GetDefaultAgent(ctx context.Context, tenantID string) (string, error) {
+	var agentID string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM agents WHERE tenant_id = $1 AND status = 'active' ORDER BY created_at ASC LIMIT 1`,
+		tenantID,
+	).Scan(&agentID)
+	if err != nil {
+		return "", fmt.Errorf("get default agent: %w", err)
+	}
+	return agentID, nil
+}
+
+func (s *PostgresStore) ResolveSession(ctx context.Context, tenantID, connectorType, accountID, threadID, agentID string) (*handler.Session, error) {
 	var session handler.Session
 
 	// Try to find existing session
@@ -29,8 +41,7 @@ func (s *PostgresStore) ResolveSession(ctx context.Context, tenantID, connectorT
 	).Scan(&session.ID, &session.TenantID, &session.AgentID, &session.ConnectorType, &session.ConnectorAccountID, &session.ThreadID, &session.NextIngressSeq, &session.LastProcessedIngressSeq)
 
 	if err == sql.ErrNoRows {
-		// Create new session - resolve agent from connector mapping or use default
-		agentID := "agent-default" // TODO: resolve from identity mapping
+		// Create new session with resolved agent_id (must be a valid UUID)
 		sessionID := uuid.New().String()
 
 		_, err = s.db.ExecContext(ctx,

@@ -78,7 +78,7 @@ create_stream STREAM_TASKS \
 # Subjects: ingress, memory, router, heartbeat
 # Retention: limits  |  Max age: 24h  |  Max bytes: 5 GB
 create_stream STREAM_EVENTS \
-  --subjects "ingress.>,memory.>,router.>,heartbeat.>" \
+  --subjects "ingress.>,memory.>,router.>,heartbeat.>,egress.>" \
   --retention limits \
   --max-age "24h" \
   --max-bytes 5368709120 \

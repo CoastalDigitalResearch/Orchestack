@@ -8,6 +8,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 20
@@ -37,18 +39,19 @@ class AgentLoop:
     def __init__(self, js, settings):
         self.js = js
         self.settings = settings
+        self._http = httpx.AsyncClient(timeout=180.0)
 
     async def handle_dispatch(self, msg):
         """Handle a tasks.dispatch event."""
         data = json.loads(msg.data)
-        payload = data.get("payload", {})
 
+        # task-dispatcher publishes flat top-level fields (no nested payload)
         ctx = LoopContext(
-            task_id=payload["task_id"],
-            session_id=payload["session_id"],
-            agent_id=payload["agent_id"],
-            tenant_id=data.get("tenant_id", "tenant-default"),
-            capability_grant_id=payload.get("capability_grant_id", ""),
+            task_id=data["task_id"],
+            session_id=data["session_id"],
+            agent_id=data["agent_id"],
+            tenant_id=data.get("tenant_id", ""),
+            capability_grant_id=data.get("capability_grant_id", ""),
         )
 
         logger.info("Starting loop for task %s", ctx.task_id)
@@ -68,9 +71,9 @@ class AgentLoop:
                 },
             )
 
-            # Send response via connector egress
+            # Send response via connector egress (webchat for MVP)
             await self._emit_event(
-                "egress.message",
+                "egress.webchat.message",
                 {
                     "task_id": ctx.task_id,
                     "session_id": ctx.session_id,
@@ -118,6 +121,8 @@ class AgentLoop:
                     "content": f"Relevant context from memory:\n{memory_hits}",
                 }
             )
+
+        content = ""
 
         # 4. Run the loop
         for iteration in range(MAX_ITERATIONS):
@@ -177,8 +182,24 @@ class AgentLoop:
         return content if content else "I was unable to complete the task within the iteration limit."
 
     async def _load_agent_config(self, agent_id: str) -> dict:
-        """Load agent configuration from database."""
-        # TODO: Query agent_definitions table
+        """Load agent configuration from database via asyncpg."""
+        try:
+            import asyncpg
+
+            conn = await asyncpg.connect(self.settings.database_url)
+            try:
+                row = await conn.fetchrow(
+                    "SELECT definition FROM agent_definitions WHERE agent_id = $1 LIMIT 1",
+                    agent_id,
+                )
+                if row and row["definition"]:
+                    import json as _json
+
+                    return _json.loads(row["definition"]) if isinstance(row["definition"], str) else row["definition"]
+            finally:
+                await conn.close()
+        except Exception as e:
+            logger.warning("Failed to load agent config for %s: %s", agent_id, e)
         return {"system_prompt": "You are a helpful AI assistant."}
 
     async def _load_session_history(self, session_id: str) -> list[dict]:
@@ -192,27 +213,33 @@ class AgentLoop:
         return ""
 
     async def _call_model(self, ctx: LoopContext) -> dict:
-        """Call the model router to get a completion."""
-        request_data = json.dumps(
-            {
-                "messages": ctx.messages,
-                "capability_grant_id": ctx.capability_grant_id,
-                "task_id": ctx.task_id,
-            }
-        ).encode()
+        """Call the model router HTTP endpoint to get a completion."""
+        model_router_url = getattr(self.settings, "model_router_url", "http://model-router:8080")
+        request_payload = {
+            "messages": ctx.messages,
+            "capability_grant_id": ctx.capability_grant_id,
+            "tenant_id": ctx.tenant_id,
+        }
 
-        # Publish to router.request and wait for reply
         try:
-            await self.js.publish(
-                "router.request",
-                request_data,
+            resp = await self._http.post(
+                f"{model_router_url}/v1/router/request",
+                json=request_payload,
             )
-            # In production, this would use request/reply pattern
-            # For now, return a mock response
+            resp.raise_for_status()
+            result = resp.json()
+
+            # Extract from RoutingResponse envelope
+            provider_resp = result.get("response", {})
+            usage = provider_resp.get("usage", {})
             return {
-                "content": "I'll help you with that.",
-                "tool_calls": [],
-                "usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150},
+                "content": provider_resp.get("content", ""),
+                "tool_calls": provider_resp.get("tool_calls") or [],
+                "usage": {
+                    "input_tokens": usage.get("input_tokens", 0),
+                    "output_tokens": usage.get("output_tokens", 0),
+                    "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+                },
             }
         except Exception as e:
             logger.error("Model call failed: %s", e)

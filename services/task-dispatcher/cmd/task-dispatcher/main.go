@@ -19,10 +19,10 @@ import (
 
 func main() {
 	// Read configuration from environment variables.
-	port := envOrDefault("PORT", "8081")
+	port := envOrDefault("PORT", "8080")
 	natsURL := envOrDefault("NATS_URL", nats.DefaultURL)
 	databaseURL := envOrDefault("DATABASE_URL", "postgres://orchestack:orchestack@localhost:5432/orchestack?sslmode=disable")
-	policyEvaluatorURL := envOrDefault("POLICY_EVALUATOR_URL", "http://policy-evaluator:8082")
+	policyEvaluatorURL := envOrDefault("POLICY_EVALUATOR_URL", "http://policy-evaluator:8080")
 
 	// Connect to PostgreSQL.
 	pgStore, err := store.NewPostgresStore(databaseURL)

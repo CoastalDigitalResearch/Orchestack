@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     redact_mode: str = "mask"  # mask, remove, tag_only
     custom_patterns_path: str | None = None
 
-    model_config = {"env_prefix": "ORCHESTACK_DLP_"}
+    model_config = {"env_prefix": ""}
 
 
 settings = Settings()

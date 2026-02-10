@@ -34,7 +34,11 @@ func newMockStore() *mockSessionStore {
 	}
 }
 
-func (m *mockSessionStore) ResolveSession(_ context.Context, tenantID, connectorType, accountID, threadID string) (*Session, error) {
+func (m *mockSessionStore) GetDefaultAgent(_ context.Context, _ string) (string, error) {
+	return "00000000-0000-0000-0000-00000000a001", nil
+}
+
+func (m *mockSessionStore) ResolveSession(_ context.Context, tenantID, connectorType, accountID, threadID, agentID string) (*Session, error) {
 	if m.resolveErr != nil {
 		return nil, m.resolveErr
 	}
@@ -45,10 +49,13 @@ func (m *mockSessionStore) ResolveSession(_ context.Context, tenantID, connector
 	if s, ok := m.sessions[key]; ok {
 		return s, nil
 	}
+	if agentID == "" {
+		agentID = "00000000-0000-0000-0000-00000000a001"
+	}
 	s := &Session{
 		ID:                 "sess-" + threadID,
 		TenantID:           tenantID,
-		AgentID:            "agent-default",
+		AgentID:            agentID,
 		ConnectorType:      connectorType,
 		ConnectorAccountID: accountID,
 		ThreadID:           threadID,

@@ -25,6 +25,7 @@ class SessionInfo:
 
     __slots__ = (
         "_message_timestamps",
+        "agent_id",
         "authenticated_sub",
         "created_at",
         "last_active",
@@ -39,6 +40,7 @@ class SessionInfo:
         websocket: WebSocket | None = None,
         sender_display_name: str = "Anonymous",
         authenticated_sub: str | None = None,
+        agent_id: str | None = None,
     ) -> None:
         self.session_id = session_id
         self.websocket = websocket
@@ -46,6 +48,7 @@ class SessionInfo:
         self.last_active = time.monotonic()
         self.sender_display_name = sender_display_name
         self.authenticated_sub = authenticated_sub
+        self.agent_id = agent_id
         self._message_timestamps: list[float] = []
 
     def touch(self) -> None:
@@ -57,11 +60,7 @@ class SessionInfo:
         return (time.monotonic() - self.last_active) > timeout_s
 
     def check_rate_limit(self, max_per_minute: int) -> bool:
-        """Return *True* if the session is within rate limits.
-
-        Prunes timestamps older than 60 seconds, then checks if the count
-        is below *max_per_minute*.
-        """
+        """Return *True* if the session is within rate limits."""
         now = time.monotonic()
         cutoff = now - 60.0
         self._message_timestamps = [ts for ts in self._message_timestamps if ts > cutoff]
@@ -72,20 +71,7 @@ class SessionInfo:
 
 
 class WebchatConnector(ConnectorBase):
-    """Orchestack connector for a browser-based webchat widget.
-
-    This connector uses FastAPI WebSocket support directly.  It manages
-    sessions in-memory and publishes normalised messages to NATS.
-
-    Parameters
-    ----------
-    settings:
-        Validated :class:`WebchatSettings` instance.
-    publish_callback:
-        Async callable ``(subject: str, data: bytes) -> None`` used to
-        publish messages to NATS.  Injected by the entrypoint so the
-        connector itself stays transport-agnostic.
-    """
+    """Orchestack connector for a browser-based webchat widget."""
 
     def __init__(
         self,
@@ -112,6 +98,7 @@ class WebchatConnector(ConnectorBase):
         websocket: WebSocket | None = None,
         display_name: str = "Anonymous",
         authenticated_sub: str | None = None,
+        agent_id: str | None = None,
     ) -> SessionInfo:
         """Create a new session and store it."""
         session_id = uuid.uuid4().hex
@@ -120,9 +107,10 @@ class WebchatConnector(ConnectorBase):
             websocket=websocket,
             sender_display_name=display_name,
             authenticated_sub=authenticated_sub,
+            agent_id=agent_id,
         )
         self._sessions[session_id] = session
-        logger.info("Session created: %s", session_id)
+        logger.info("Session created: %s (agent_id=%s)", session_id, agent_id)
         return session
 
     def get_session(self, session_id: str) -> SessionInfo | None:
@@ -130,10 +118,7 @@ class WebchatConnector(ConnectorBase):
         return self._sessions.get(session_id)
 
     def attach_websocket(self, session_id: str, websocket: WebSocket) -> bool:
-        """Attach (or re-attach) a WebSocket to an existing session.
-
-        Returns *True* if the session exists and was updated.
-        """
+        """Attach (or re-attach) a WebSocket to an existing session."""
         session = self._sessions.get(session_id)
         if session is None:
             return False
@@ -156,11 +141,7 @@ class WebchatConnector(ConnectorBase):
         session_id: str,
         data: dict[str, Any],
     ) -> NormalizedMessage | None:
-        """Process an incoming JSON message from a WebSocket client.
-
-        Returns the normalised message if it was published, or *None* if
-        the message was rejected (rate limit, too long, etc.).
-        """
+        """Process an incoming JSON message from a WebSocket client."""
         session = self._sessions.get(session_id)
         if session is None:
             logger.warning("Message from unknown session %s", session_id)
@@ -196,6 +177,12 @@ class WebchatConnector(ConnectorBase):
             )
 
         message_id = uuid.uuid4().hex
+
+        # Include agent_id in extra for downstream routing
+        extra = data.get("extra", {})
+        if session.agent_id:
+            extra["agent_id"] = session.agent_id
+
         normalized = NormalizedMessage(
             message_id=message_id,
             connector_type=self.connector_type,
@@ -207,13 +194,16 @@ class WebchatConnector(ConnectorBase):
             attachments=attachments,
             timestamp=datetime.now(UTC),
             reply_to=data.get("reply_to"),
-            extra=data.get("extra", {}),
+            extra=extra,
         )
 
-        # Publish to NATS.
+        # Publish to NATS with agent_id in the ingress payload
         if self._publish is not None:
-            payload = normalized.model_dump_json().encode()
-            await self._publish("ingress.webchat.message", payload)
+            ingress_payload = json.loads(normalized.model_dump_json())
+            if session.agent_id:
+                ingress_payload["agent_id"] = session.agent_id
+            payload_bytes = json.dumps(ingress_payload).encode()
+            await self._publish("ingress.webchat.message", payload_bytes)
             logger.debug("Published ingress event for message %s", message_id)
 
         return normalized
@@ -223,19 +213,7 @@ class WebchatConnector(ConnectorBase):
     # ------------------------------------------------------------------
 
     async def send(self, channel: str, message: str, **kwargs: Any) -> None:
-        """Send a message to a WebSocket client identified by session_id.
-
-        Parameters
-        ----------
-        channel:
-            The session ID of the target client.
-        message:
-            JSON-encoded message string to push to the WebSocket.
-        **kwargs:
-            Optional extras:
-            - ``streaming`` (bool): if *True*, the message is a partial
-              streaming chunk rather than a complete response.
-        """
+        """Send a message to a WebSocket client identified by session_id."""
         session = self._sessions.get(channel)
         if session is None:
             logger.warning("Cannot send to unknown session %s", channel)
@@ -260,19 +238,7 @@ class WebchatConnector(ConnectorBase):
         done: bool = False,
         message_id: str | None = None,
     ) -> None:
-        """Send a streaming response chunk to a WebSocket client.
-
-        Parameters
-        ----------
-        session_id:
-            Target session.
-        chunk:
-            The text chunk to append.
-        done:
-            If *True*, signals that this is the final chunk.
-        message_id:
-            Optional message ID for the complete response being streamed.
-        """
+        """Send a streaming response chunk to a WebSocket client."""
         payload = json.dumps(
             {
                 "type": "stream",

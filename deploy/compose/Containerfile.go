@@ -14,7 +14,7 @@ RUN cd services/${SERVICE} && go build -o /app ./cmd/${SERVICE}
 
 # Runtime
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates wget
 COPY --from=builder /app /app
 USER 65534:65534
 EXPOSE 8080

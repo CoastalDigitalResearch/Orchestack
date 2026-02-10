@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     minio_secret_key: str = "minioadmin"
     minio_bucket: str = "homarus-memory"
 
-    model_config = {"env_prefix": "ORCHESTACK_"}
+    model_config = {"env_prefix": ""}
 
 
 settings = Settings()

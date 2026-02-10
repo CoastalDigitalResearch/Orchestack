@@ -31,7 +31,8 @@ Thumbs.db
 
 # Secrets - NEVER commit
 .env
-.env.*
+.env.local
+.env.production
 *.pem
 *.key
 

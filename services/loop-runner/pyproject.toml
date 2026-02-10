@@ -12,4 +12,6 @@ dependencies = [
     "nats-py>=2.7",
     "pydantic-settings>=2.0",
     "orchestack-envelope",
+    "httpx>=0.27",
+    "asyncpg>=0.29",
 ]

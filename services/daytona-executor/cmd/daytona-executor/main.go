@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	port := envOr("PORT", "8083")
+	port := envOr("PORT", "8080")
 	natsURL := envOr("NATS_URL", nats.DefaultURL)
 
 	// ── Sandbox manager ───────────────────────────────────────────────
